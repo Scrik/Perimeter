@@ -790,7 +790,7 @@ begin
   // Посылаем сообщение о запуске Периметра:
   PostMessage(PerimeterSettings.MessagesReceiverHandle, PerimeterSettings.MessageNumber, PM_START, PM_START);
 
-  {with PerimeterSettings, PerimeterInfo do }while Active do
+  while Active do
   begin
     // Чистим структуру с информацией:
     FillChar(PerimeterInfo, SizeOf(PerimeterInfo), #0);
@@ -1014,7 +1014,7 @@ begin
 
     // Проверяем на брейкпоинты:
 
-    PerimeterInfo.BreakpointExists := (PerimeterInfo.ElapsedTime > MaximumRunTime) or EmulateDebugger;
+    PerimeterInfo.BreakpointExists := (PerimeterInfo.ElapsedTime > MaximumRunTime) or EmulateBreakpoint;
     if PerimeterInfo.BreakpointExists and IsNumberContains(PerimeterSettings.CheckingsType, WINAPI_BP) then EliminateThreat;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
