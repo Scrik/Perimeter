@@ -1,4 +1,4 @@
-unit Perimeter;
+﻿unit Perimeter;
 
 interface
 
@@ -31,13 +31,14 @@ type
 // Выходные параметры:
 type
   TPerimeterInfo = record
+    PrivilegesActivated : Boolean;  // Привилегии установлены
     Checksum            : LongWord; // Текущая контрольная сумма
     DebuggerExists      : Boolean;  // Найден отладчик
     BreakpointExists    : Boolean;  // Найден брейкпоинт
     ROMFailure          : Boolean;  // Неверная контрольная сумма
-    PrivilegesActivated : Boolean;  // Привилегии установлены
     DebuggerEmulation   : Boolean;  // Эмуляция отладчика
     BreakpointEmulation : Boolean;  // Эмуляция брейкпоинта
+    ElapsedTime         : Single;   // Время, затраченное на один такт
     Functions           : TAntiDebugFunctions; // Информация о каждой антиотладочной функции
   end;
 
@@ -782,7 +783,6 @@ var
   DebugObjectHandle: THandle;
   KernelDebuggerInfo: SYSTEM_KERNEL_DEBUGGER_INFORMATION;
   T1, T2, iCounterPerSec: Int64;
-  ElapsedTime: Single;
   DebuggerState, BreakpointState: LongWord;
 const
   DebugString: PChar = 'СЗПУ "Периметр" :: Веха #1';
@@ -790,7 +790,7 @@ begin
   // Посылаем сообщение о запуске Периметра:
   PostMessage(PerimeterSettings.MessagesReceiverHandle, PerimeterSettings.MessageNumber, PM_START, PM_START);
 
-  with PerimeterSettings, PerimeterInfo do while Active do
+  {with PerimeterSettings, PerimeterInfo do }while Active do
   begin
     // Чистим структуру с информацией:
     FillChar(PerimeterInfo, SizeOf(PerimeterInfo), #0);
@@ -808,8 +808,8 @@ begin
     // Эмуляция отладчика:
     if EmulateDebugger then
     begin
-      DebuggerExists := True;
-      DebuggerEmulation := True;
+      PerimeterInfo.DebuggerExists := True;
+      PerimeterInfo.DebuggerEmulation := True;
       EliminateThreat;
     end;
 
@@ -818,20 +818,20 @@ begin
     // Эмуляция брейкпоинта:
     if EmulateBreakpoint then
     begin
-      BreakpointExists := True;
-      BreakpointEmulation := True;
+      PerimeterInfo.BreakpointExists := True;
+      PerimeterInfo.BreakpointEmulation := True;
       EliminateThreat;
     end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Проверяем CRC:
-    if IsNumberContains(CheckingsType, ROM) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ROM) then
     begin
-      Checksum := CalculatePerimeterCRC;
-      if Checksum <> PerimeterCRC then
+      PerimeterInfo.Checksum := CalculatePerimeterCRC;
+      if PerimeterInfo.Checksum <> PerimeterCRC then
       begin
-        ROMFailure := True;
+        PerimeterInfo.ROMFailure := True;
         EliminateThreat;
       end;
     end;
@@ -839,12 +839,12 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // IDP:
-    if IsNumberContains(CheckingsType, IDP) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, IDP) then
     begin
       if IsDebuggerPresent then
       begin
-        DebuggerExists := True;
-        Functions.IDP := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.IDP := True;
         EliminateThreat;
       end;
     end;
@@ -852,13 +852,13 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // RDP:
-    if IsNumberContains(CheckingsType, RDP) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, RDP) then
     begin
       CheckRemoteDebuggerPresent(GetCurrentProcess, RemoteDebugger);
       if RemoteDebugger then
       begin
-        DebuggerExists := True;
-        Functions.RDP := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.RDP := True;
         EliminateThreat;
       end;
     end;
@@ -866,7 +866,7 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // ODS:
-    if IsNumberContains(CheckingsType, ODS) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ODS) then
     begin
       asm
         mov eax, $FFFFFFFF
@@ -877,8 +877,8 @@ begin
 
       if AsmFunctionValue = 0 then
       begin
-        DebuggerExists := True;
-        Functions.ODS := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ODS := True;
         EliminateThreat;
       end;
     end;
@@ -886,7 +886,7 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Отключаем поток от отладчика:
-    if IsNumberContains(CheckingsType, ZwSIT) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ZwSIT) then
     begin
       ZwSetInformationThread(GetCurrentThread, ThreadHideFromDebugger, nil, 0);
     end;
@@ -894,21 +894,21 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // ASM_A:
-    if IsNumberContains(CheckingsType, ASM_A) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ASM_A) then
     begin
       asm
         mov eax, fs:[30h]
         mov eax, [eax + 2]
         add eax, 65536
 
-        // EAX <> 0 -> DebuggerExists
+        // EAX <> 0 -> PerimeterInfo.DebuggerExists
         mov AsmFunctionValue, eax
       end;
 
       if AsmFunctionValue <> 0 then
       begin
-        DebuggerExists := True;
-        Functions.ASM_A := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ASM_A := True;
         EliminateThreat;
       end;
     end;
@@ -916,21 +916,21 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // ASM_B:
-    if IsNumberContains(CheckingsType, ASM_B) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ASM_B) then
     begin
       asm
         mov eax, fs:[30h]
         mov eax, [eax + 68h]
         and eax, 70h
 
-        // EAX <> 0 -> DebuggerExists
+        // EAX <> 0 -> PerimeterInfo.DebuggerExists
         mov AsmFunctionValue, eax
       end;
 
       if AsmFunctionValue <> 0 then
       begin
-        DebuggerExists := True;
-        Functions.ASM_B := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ASM_B := True;
         EliminateThreat;
       end;
     end;
@@ -938,14 +938,14 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // ZwQIP:
-    if IsNumberContains(CheckingsType, ZwQIP) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ZwQIP) then
     begin
       // 1й способ:
       ZwQueryInformationProcess(GetCurrentProcess, ProcessDebugFlags, @NoDebugInherit, SizeOf(NoDebugInherit), nil);
       if not NoDebugInherit then
       begin
-        DebuggerExists := True;
-        Functions.ZwQIP := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ZwQIP := True;
         EliminateThreat;
       end;
 
@@ -955,8 +955,8 @@ begin
       ZwQueryInformationProcess(GetCurrentProcess, ProcessDebugObjectHandle, @DebugObjectHandle, SizeOf(DebugObjectHandle), nil);
       if DebugObjectHandle <> 0 then
       begin
-        DebuggerExists := True;
-        Functions.ZwQIP := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ZwQIP := True;
         EliminateThreat;
       end;
 
@@ -967,8 +967,8 @@ begin
       ZwQueryInformationProcess(GetCurrentProcess, ProcessDebugPort, @DebugPort, SizeOf(DebugPort), nil);
       if DebugPort <> 0 then
       begin
-        DebuggerExists := True;
-        Functions.ZwQIP := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ZwQIP := True;
         EliminateThreat;
       end;
       
@@ -978,13 +978,13 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // ZwQSI:
-    if IsNumberContains(CheckingsType, ZwQSI) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ZwQSI) then
     begin
       ZwQuerySystemInformation(SystemKernelDebuggerInformation, @KernelDebuggerInfo, SizeOf(KernelDebuggerInfo), nil);
       if KernelDebuggerInfo.DebuggerEnabled and (not KernelDebuggerInfo.DebuggerNotPresent) then
       begin
-        DebuggerExists := True;
-        Functions.ZwQIP := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ZwQIP := True;
         EliminateThreat;
       end;
     end;
@@ -992,14 +992,14 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // ZwClose:
-    if IsNumberContains(CheckingsType, ZwClose) then
+    if IsNumberContains(PerimeterSettings.CheckingsType, ZwClose) then
     begin
       try
         // Пробуем поднять ядерное исключение:
         CloseHandle($3333);
       except
-        DebuggerExists := True;
-        Functions.ZwClose := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.ZwClose := True;
         EliminateThreat;
       end;
     end;
@@ -1008,29 +1008,30 @@ begin
 
     // Засекаем время:
     QueryPerformanceCounter(T2);
-    ElapsedTime := (T2 - T1) / iCounterPerSec;
+    PerimeterInfo.ElapsedTime := (T2 - T1) / iCounterPerSec;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Проверяем на брейкпоинты:
-    BreakpointExists := ElapsedTime > MaximumRunTime;
-    if BreakpointExists and IsNumberContains(CheckingsType, WINAPI_BP) then EliminateThreat;
+
+    PerimeterInfo.BreakpointExists := (PerimeterInfo.ElapsedTime > MaximumRunTime) or EmulateDebugger;
+    if PerimeterInfo.BreakpointExists and IsNumberContains(PerimeterSettings.CheckingsType, WINAPI_BP) then EliminateThreat;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Внешняя проверка:
-    if @OnChecking <> nil then
-      if OnChecking(PerimeterInfo) then
+    if @PerimeterSettings.OnChecking <> nil then
+      if PerimeterSettings.OnChecking(PerimeterInfo) then
       begin
-        DebuggerExists := True;
-        Functions.External := True;
+        PerimeterInfo.DebuggerExists := True;
+        PerimeterInfo.Functions.External := True;
         EliminateThreat;
       end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Формируем сообщение об отладчике:
-    if DebuggerExists or ROMFailure then
+    if PerimeterInfo.DebuggerExists or PerimeterInfo.ROMFailure then
     case EmulateDebugger of
       TRUE:  DebuggerState := DB_EMULATE;
       FALSE: DebuggerState := DB_EXISTS;
@@ -1039,8 +1040,8 @@ begin
       DebuggerState := DB_NOT_EXISTS;
 
     // Формируем сообщение о брейкпоинте:
-    if BreakpointExists then
-    case EmulateDebugger of
+    if PerimeterInfo.BreakpointExists then
+    case EmulateBreakpoint of
       TRUE:  BreakpointState := BP_EMULATE;
       FALSE: BreakpointState := BP_EXISTS;
     end
@@ -1048,11 +1049,11 @@ begin
       BreakpointState := BP_NOT_EXISTS;
 
     // Посылаем сообщение:
-    PostMessage(MessagesReceiverHandle, MessageNumber, DebuggerState, BreakpointState);
+    PostMessage(PerimeterSettings.MessagesReceiverHandle, PerimeterSettings.MessageNumber, DebuggerState, BreakpointState);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    Sleep(Interval);
+    Sleep(PerimeterSettings.Interval);
   end;
 
 
@@ -1195,6 +1196,7 @@ end;
 initialization
   CRCInit;
   Randomize;
-
+  FillChar(PerimeterInfo, SizeOf(PerimeterInfo), #0);
+  FillChar(PerimeterSettings, SizeOf(PerimeterSettings), #0);
 
 end.
