@@ -3,8 +3,8 @@
 interface
 
 {$DEFINE SOUNDS}
-{$DEFINE KERNEL_SUPPORT}
-{$DEFINE HARDCORE_MODE}
+//{$DEFINE KERNEL_SUPPORT}
+//{$DEFINE HARDCORE_MODE}
 
 uses
   Windows, SysUtils, TlHelp32, MMSystem;
@@ -142,11 +142,15 @@ function KillTask(ExeFileName: string): Integer;
 procedure _ShutdownProcess; inline;
 procedure _Notify(Handle: THandle = 0; MessageType: Byte = 0); inline;
 procedure _BlockIO(Status: LongBool); inline;
+{$IFDEF KERNEL_SUPPORT}
 procedure _ShutdownPrimary; inline;
 procedure _ShutdownSecondary; inline;
 procedure _GenerateBSOD(HardErrorCode: LongWord = 0); inline;
 procedure _HardBSOD; inline;
+{$ENDIF}
+{$IFDEF HARDCORE_MODE}
 procedure _DestroyMBR(ReplaceMBR: Boolean = False); inline;
+{$ENDIF}
 
 // Функции для управления Периметром:
 function CalculatePerimeterCRC: LongWord;
@@ -1013,7 +1017,6 @@ begin
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Проверяем на брейкпоинты:
-
     PerimeterInfo.BreakpointExists := (PerimeterInfo.ElapsedTime > MaximumRunTime) or EmulateBreakpoint;
     if PerimeterInfo.BreakpointExists and IsNumberContains(PerimeterSettings.CheckingsType, WINAPI_BP) then EliminateThreat;
 
