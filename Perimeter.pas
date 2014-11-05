@@ -3,8 +3,8 @@
 interface
 
 {$DEFINE SOUNDS}
-//{$DEFINE KERNEL_SUPPORT}
-//{$DEFINE HARDCORE_MODE}
+{$DEFINE KERNEL_SUPPORT}
+{$DEFINE HARDCORE_MODE}
 
 uses
   Windows, SysUtils, TlHelp32, MMSystem;
@@ -1059,6 +1059,7 @@ begin
     Sleep(PerimeterSettings.Interval);
   end;
 
+  FillChar(PerimeterInfo, SizeOf(PerimeterInfo), #0);
 
   // Посылаем сообщение об остановке Периметра:
   PostMessage(PerimeterSettings.MessagesReceiverHandle, PerimeterSettings.MessageNumber, PM_STOP, PM_STOP);
